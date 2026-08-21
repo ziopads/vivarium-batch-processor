@@ -1,0 +1,30 @@
+# Everything under data/ is the operator's own material — photographs, records,
+# ledgers, archives. None of it belongs in a shared repo. `group_batch.py init`
+# recreates the whole tree on a fresh clone, so nothing is lost by ignoring it
+# wholesale rather than committing placeholder directories.
+data/
+
+# Local state: what this particular machine has shipped, what is half-done, which
+# books are outstanding. Useful to keep, meaningless to anyone else, and it names
+# real people and real books.
+STATE.md
+
+# Catalogue raisonné scripts — a second, private collection running through the same
+# pipeline. Kept working, not shared.
+scripts/cr/
+
+# Credentials for Supabase and R2. Never.
+.env
+.env.*
+
+# Apply logs carry item ids and titles.
+*.log
+
+# Scratch and OS noise
+__pycache__/
+*.py[cod]
+.DS_Store
+Thumbs.db
+.venv/
+venv/
+node_modules/

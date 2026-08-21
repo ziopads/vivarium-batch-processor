@@ -1,0 +1,16 @@
+{
+  "name": "vivarium-batch-processor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bulk ingest pipeline for the Vivarium catalogue: photographs to seeded records.",
+  "scripts": {
+    "sync": "node --env-file=../vivarium/.env.vivarium scripts/sync_from_supabase.mjs",
+    "upload": "node --env-file=../vivarium/.env.vivarium scripts/images-to-r2.mjs",
+    "seed": "node --env-file=../vivarium/.env.vivarium scripts/seed-new-items.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1085.0",
+    "@supabase/supabase-js": "^2.110.2",
+    "sharp": "^0.35.3"
+  }
+}
