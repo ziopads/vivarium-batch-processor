@@ -1,2 +1,10 @@
 Pillow>=10.0
 pillow-heif>=0.15
+
+# Barcode decoding for scripts/decode_barcodes.py.
+# zxing-cpp 3.x requires Python 3.10+. The system python3 on macOS is Xcode's
+# 3.9.6, which has no 3.x wheel and cannot build it from source, so this is
+# pinned to the 2.x line. Drop the ceiling once the pipeline moves to a newer
+# interpreter. pyzbar (plus `brew install zbar`) is the fallback and the script
+# uses whichever it finds.
+zxing-cpp>=2.2,<3

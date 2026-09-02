@@ -4,10 +4,11 @@
 # wholesale rather than committing placeholder directories.
 data/
 
-# Local state: what this particular machine has shipped, what is half-done, which
-# books are outstanding. Useful to keep, meaningless to anyone else, and it names
-# real people and real books.
+# Local state and session handoffs: what this machine has shipped, what is half-done,
+# which books are outstanding. Useful to keep, meaningless to anyone else, and they
+# name real people and real books.
 STATE.md
+HANDOFF.md
 
 # Catalogue raisonné scripts — a second, private collection running through the same
 # pipeline. Kept working, not shared.
