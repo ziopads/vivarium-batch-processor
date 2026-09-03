@@ -35,7 +35,7 @@ USAGE
     --yes            skip the confirmation
     --stop-before-seed   do everything except the Supabase insert
     --no-archive     leave the shipped books in the staging pile
-    --keep-intake    leave data/intake/ and data/ready/ in place afterwards
+    --keep-intake    leave data/intake/, data/ready/ and data/_work/enrich-read/ in place
 
 Run from anywhere; every path resolves from this file's own location.
 """
@@ -98,7 +98,7 @@ def main():
     ap.add_argument("--no-archive", action="store_true",
                     help="don't archive the shipped books afterwards (you'll have to)")
     ap.add_argument("--keep-intake", action="store_true",
-                    help="leave data/intake/ and data/ready/ in place afterwards")
+                    help="leave data/intake/, data/ready/ and data/_work/enrich-read/ in place")
     args = ap.parse_args()
 
     paths.require_app()
@@ -205,6 +205,31 @@ def main():
             "Uploading images to R2")
 
         # ---- 7. insert rows -----------------------------------------------------
+        # Everything since apply_images.py has rewritten items.json at least once, and
+        # anything else on the machine can rewrite it too. On 2 September 2026 a stray
+        # sync_from_supabase.mjs ran during the R2 upload and replaced the file with
+        # Supabase's contents; the seed then matched none of the 577 ids, exited zero,
+        # and this script printed "Done". Confirm the records are still there.
+        import json as _json
+        try:
+            with open(paths.ITEMS) as fh:
+                _items = _json.load(fh)
+            _have = {int(i["id"]) for i in _items if str(i.get("id", "")).isdigit()}
+        except Exception as e:
+            raise StepFailed(f"Could not re-read {paths.ITEMS} before seeding: {e}")
+        _lost = [i for i in new_ids if i not in _have]
+        if _lost:
+            raise StepFailed(
+                f"{len(_lost)} of the {len(new_ids)} new ids are no longer in items.json "
+                f"(first missing: {_lost[0]}).\n"
+                f"  Something overwrote {paths.ITEMS} after apply_images.py wrote to it.\n"
+                f"  The intact file is almost certainly one of the .bak siblings — each\n"
+                f"  script leaves its own suffix, and the largest recent one is the file\n"
+                f"  you want. Restore it, then seed by hand:\n"
+                f"    node {envflag} {S('seed-new-items.mjs')} --min {min(new_ids)}\n"
+                f"  Images are already in R2; nothing needs re-uploading."
+            )
+
         if args.stop_before_seed:
             print(f"\nStopped before seeding, as asked. To finish:\n"
                   f"  node {envflag} {S('seed-new-items.mjs')} "
@@ -255,6 +280,17 @@ def main():
             for d in (paths.INTAKE, paths.READY):
                 shutil.rmtree(d, ignore_errors=True)
             print("\nCleared data/intake/ and data/ready/.")
+
+        # data/_work/enrich-read/ is spent for the same reason: archive has just moved
+        # these folders out of data/books/ and emptied records_source.json, so every
+        # reading copy left behind is an orphan of a book already in the catalogue.
+        # Regenerate with scripts/make_read_copies.py when the next batch is committed.
+        enrich_read = os.path.join(paths.WORK, "enrich-read")
+        if args.keep_intake:
+            print("Leaving data/_work/enrich-read/ in place, as asked.")
+        elif os.path.isdir(enrich_read):
+            shutil.rmtree(enrich_read, ignore_errors=True)
+            print("Cleared data/_work/enrich-read/.")
 
         print(f"\n(apply log kept at {apply_log} in case you need to re-run merge_records.py)")
 

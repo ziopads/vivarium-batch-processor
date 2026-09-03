@@ -48,7 +48,22 @@ if (idsArg) { const set = new Set(idsArg.split(',').map(Number)); picked = items
 else if (minId != null) picked = items.filter((i) => i.id >= minId);
 else { console.error('Specify --min <id> or --ids a,b,c. (Refusing to guess a range.)'); process.exit(1); }
 
-if (!picked.length) { console.log('No matching records in items.json — nothing to do.'); process.exit(0); }
+// Exit non-zero. Being handed a list of ids and matching none of them is a failure,
+// not a no-op: it means items.json is not the file that apply_images.py wrote to, or
+// something overwrote it in between. handoff.py treats a zero exit as success, so a
+// quiet exit(0) here reports "done" on a hand-off that inserted nothing.
+if (!picked.length) {
+  const want = idsArg ? `ids ${idsArg.split(',')[0]}..${idsArg.split(',').slice(-1)[0]}` : `ids >= ${minId}`;
+  console.error(`No records in items.json match ${want}.`);
+  console.error(`  looked in: ${ITEMS}`);
+  console.error(`  it holds ${items.length} item(s), max id ${items.reduce((m, i) => Math.max(m, Number(i.id) || 0), 0)}`);
+  console.error('');
+  console.error('If those ids were just created, something overwrote items.json after');
+  console.error('apply_images.py wrote them. Check items.json.syncdownbak and the other');
+  console.error('.bak files in the same directory — each script leaves its own suffix, and');
+  console.error('the largest recent one is usually the intact file.');
+  process.exit(1);
+}
 const ids = picked.map((i) => i.id).sort((a, b) => a - b);
 
 // --- SAFETY CHECK: abort if any target id already exists in Supabase ---

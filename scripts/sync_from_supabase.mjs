@@ -67,7 +67,36 @@ const maxId = items.reduce((m, i) => Math.max(m, i.id), 0);
 const dest = process.env.LOCAL_DATA_FILE
   ? path.resolve(APP, process.env.LOCAL_DATA_FILE)
   : ITEMS;
-if (existsSync(dest)) copyFileSync(dest, dest + '.syncdownbak');
+// A downward sync overwrites the local file wholesale. Any local id ABOVE Supabase's
+// max is a record that exists here and not there — work created locally and not yet
+// seeded. Discarding it silently is how 577 enriched books came within one command of
+// being lost on 2 September 2026: something ran this mid-hand-off, between
+// apply_images.py and the seed, and the seed then found nothing to insert and exited
+// cleanly. Nothing in the run reported a problem.
+//
+// Refuse rather than clobber. --force overrides.
+const force = process.argv.includes('--force');
+if (existsSync(dest)) {
+  let local = [];
+  try { local = JSON.parse(readFileSync(dest, 'utf8')); } catch { local = []; }
+  const ahead = (Array.isArray(local) ? local : [])
+    .map((i) => Number(i?.id))
+    .filter((id) => Number.isFinite(id) && id > maxId)
+    .sort((a, b) => a - b);
+  if (ahead.length && !force) {
+    console.error(`ABORT: ${dest}`);
+    console.error(`  holds ${ahead.length} record(s) with ids above Supabase's max (${maxId}):`);
+    console.error(`  ${ahead[0]}..${ahead[ahead.length - 1]}`);
+    console.error('');
+    console.error('These exist locally and NOT in Supabase — unshipped work. Pulling now would');
+    console.error('discard them. Seed them first:');
+    console.error(`  node --env-file=<env> scripts/seed-new-items.mjs --min ${maxId + 1}`);
+    console.error('');
+    console.error('Then re-run this. Pass --force only if you mean to throw them away.');
+    process.exit(1);
+  }
+  copyFileSync(dest, dest + '.syncdownbak');
+}
 writeFileSync(dest, JSON.stringify(items, null, 1), 'utf8');
 console.log(`Pulled ${items.length} items from Supabase -> ${dest}`);
 console.log(`True max id = ${maxId}. New records should start at ${maxId + 1}. (local backup: items.json.syncdownbak)`);
