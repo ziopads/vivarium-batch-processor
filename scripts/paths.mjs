@@ -22,6 +22,22 @@ export const RECORDS_SOURCE = path.join(DATA, 'records_source.json');
 
 export const APP =
   process.env.VIVARIUM_APP || path.join(path.dirname(REPO), 'vivarium');
+
+/**
+ * Was the app directory named, or guessed?
+ *
+ * The default is a sibling called `vivarium`, which was correct when one
+ * checkout served every instance. It is not correct now: each instance has its
+ * own clone (vivarium, vivarium-tamplin, vivarium-sirsinate), and passing
+ * --env-file changes which DATABASE a script reads without changing which TREE
+ * it writes to. On 10 September 2026 a sync pointed at the Tamplin database
+ * aimed 221 paintings at the library's tree; only the id-ahead guard in
+ * sync_from_supabase.mjs stopped it.
+ *
+ * Callers that WRITE into the app should require this to be true. Reading is
+ * harmless either way.
+ */
+export const APP_EXPLICIT = Boolean(process.env.VIVARIUM_APP);
 export const APP_DATA = path.join(APP, 'data');
 export const ITEMS = path.join(APP_DATA, 'items.json');
 export const PUBLIC = path.join(APP, 'public');
@@ -38,4 +54,33 @@ export function requireApp() {
     );
     process.exit(1);
   }
+}
+
+/**
+ * Refuse to write into a guessed tree when the environment names a specific
+ * database.
+ *
+ * `--env-file` selects the database. VIVARIUM_APP selects the tree. Nothing
+ * connects them, so the dangerous combination is an env file for one instance
+ * and a defaulted app path pointing at another's clone. Naming the tree makes
+ * the pairing deliberate.
+ *
+ * This does not catch every mismatch — a wrong VIVARIUM_APP is still wrong, and
+ * no check here can know which database an env file belongs to. It catches the
+ * one that actually happened.
+ */
+export function requireExplicitApp(what = 'write') {
+  if (APP_EXPLICIT) return;
+  console.error(
+    `REFUSING TO ${what.toUpperCase()}: VIVARIUM_APP is not set, so the app directory was\n` +
+      `guessed as:\n  ${APP}\n\n` +
+      `--env-file chooses the DATABASE; VIVARIUM_APP chooses the TREE. With one\n` +
+      `clone per instance they have to be named together, or a pull from one\n` +
+      `instance lands in another's working copy.\n\n` +
+      `Set it in that clone's .env.local, e.g.\n` +
+      `  VIVARIUM_APP=/Users/you/Desktop/_PROJECTS/vivarium-tamplin\n` +
+      `or pass it inline:\n` +
+      `  VIVARIUM_APP=../vivarium-tamplin node --env-file=... scripts/<script>.mjs`,
+  );
+  process.exit(1);
 }

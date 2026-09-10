@@ -3,13 +3,22 @@
 // Run this BEFORE apply_images.py so new ids are assigned above Supabase's true max id
 // (prevents the id-collision that overwrites live records).
 //
-//   npm run sync
+//   VIVARIUM_APP=../vivarium node --env-file=../vivarium/.env.local scripts/sync_from_supabase.mjs
+//
+// VIVARIUM_APP is REQUIRED: --env-file names the database, VIVARIUM_APP names the
+// clone to write into, and nothing else connects them.
+//
+// NOT A BACKUP. rowToItem maps every row on the way through and normalizes
+// `visibility` among other things, which is the wrong shape for a snapshot taken
+// before a migration that rewrites that column. Use scripts/backup-tables.mjs in
+// the app repo, or pg_dump.
 //
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, writeFileSync, copyFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { APP, ITEMS, requireApp } from './paths.mjs';
+import { APP, ITEMS, requireApp, requireExplicitApp } from './paths.mjs';
 
+requireExplicitApp('pull');
 requireApp();
 
 const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -30,6 +39,11 @@ function rowToItem(row) {
     title: row.title || '',
     author: row.author || '',
     year: row.year || '',
+    // Mirrors lib/data.ts rowToItem. Dropping this made the local file a LOSSY
+    // copy of Supabase — and this file is the pre-migration backup, so the one
+    // artefact meant to let a bad migration be undone would have come back with
+    // every record's filing erased.
+    classification: row.classification || '',
     section: row.section || '',
     shelf: row.shelf || '',
     genres: row.genres || [],
@@ -64,9 +78,17 @@ const maxId = items.reduce((m, i) => Math.max(m, i.id), 0);
 // items.json, so syncing a second instance would pull its records straight over the
 // first one's local file while the second's data file sat untouched. Resolved against
 // the APP, since that is where both files live.
+//
+// APP itself is now required to be named rather than guessed — see
+// requireExplicitApp in paths.mjs. --env-file picks the database and VIVARIUM_APP
+// picks the tree, and on 10 September 2026 the two disagreed: a pull aimed at the
+// Tamplin database wrote into the library clone. The id-ahead guard below caught
+// it, but by luck of the id ranges rather than by design.
 const dest = process.env.LOCAL_DATA_FILE
   ? path.resolve(APP, process.env.LOCAL_DATA_FILE)
   : ITEMS;
+console.log(`Pulling FROM: ${url}`);
+console.log(`Writing INTO: ${dest}`);
 // A downward sync overwrites the local file wholesale. Any local id ABOVE Supabase's
 // max is a record that exists here and not there — work created locally and not yet
 // seeded. Discarding it silently is how 577 enriched books came within one command of
